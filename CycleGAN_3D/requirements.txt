@@ -1,0 +1,11 @@
+pillow
+pandas
+pydicom
+nibabel
+tqdm
+dominate>=2.3.1
+visdom>=0.1.8
+torchsummary
+torchsummaryX
+scikit-image
+scikit-learn

@@ -1,0 +1,1 @@
+python evaluate.py --exp baseline --dataset adni --epoch 200 --map /data/hohokam/Yanxi/Data/mri2pet/adni/mapping.csv

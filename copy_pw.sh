@@ -1,0 +1,1 @@
+python copy_pw.py --src /data/amciilab/processedDataset/NACC/FS --dst /data/hohokam/AsherC/nacc_2 --flist nacc_2.csv
