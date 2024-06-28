@@ -35,19 +35,19 @@ class ImagePool():
         return return_images
 
 
-class ConditionModel(BaseModel):
+class CycleGANModel(BaseModel):
     def name(self):
-        return 'ConditionModel'
+        return 'CycleGANModel'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         # default CycleGAN did not use dropout
         parser.set_defaults(no_dropout=True)
         if is_train:
-            parser.add_argument('--lambda_A', type=float, default=4.0, help='weight for cycle loss (A -> B -> A)')
-            parser.add_argument('--lambda_B', type=float, default=4.0,
+            parser.add_argument('--lambda_A', type=float, default=2.0, help='weight for cycle loss (A -> B -> A)')
+            parser.add_argument('--lambda_B', type=float, default=2.0,
                                 help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_identity', type=float, default=0.1, help='use identity mapping. Setting lambda_identity other than 0 has an effect of '
+            parser.add_argument('--lambda_identity', type=float, default=0.2, help='use identity mapping. Setting lambda_identity other than 0 has an effect of '
                                                                                    'scaling the weight of the identity mapping loss. For example, if the weight of the'
                                                                                    ' identity loss should be 10 times smaller than the weight of the reconstruction loss, '
                                                                                    'please set lambda_identity = 0.1')
@@ -104,8 +104,6 @@ class ConditionModel(BaseModel):
             self.criterionCycle = torch.nn.L1Loss()
             self.criterionIdt = torch.nn.L1Loss()
             # initialize optimizers
-            # print(['' if ele.shape[0] != 1 else ele for ele in list(self.netG_A.parameters())])
-            # exit()
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()),
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()),
@@ -118,14 +116,14 @@ class ConditionModel(BaseModel):
         AtoB = self.opt.which_direction == 'AtoB'
         self.real_A = input[0 if AtoB else 1].to(self.device)
         self.real_B = input[1 if AtoB else 0].to(self.device)
-        self.condition = input[2]
+        # self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
-        self.fake_B = self.netG_A(self.real_A, self.condition, True)
-        self.rec_A = self.netG_B(self.fake_B, self.condition, False)
+        self.fake_B = self.netG_A(self.real_A)
+        self.rec_A = self.netG_B(self.fake_B)
 
-        self.fake_A = self.netG_B(self.real_B, self.condition, False)
-        self.rec_B = self.netG_A(self.fake_A, self.condition, True)
+        self.fake_A = self.netG_B(self.real_B)
+        self.rec_B = self.netG_A(self.fake_A)
 
     def backward_D_basic(self, netD, real, fake):
         # Real
@@ -161,10 +159,10 @@ class ConditionModel(BaseModel):
         # Identity loss
         if lambda_idt > 0:
             # G_A should be identity if real_B is fed.
-            self.idt_A = self.netG_A(self.real_B, self.condition, True)
+            self.idt_A = self.netG_A(self.real_B)
             self.loss_idt_A = self.criterionIdt(self.idt_A, self.real_B) * lambda_B * lambda_idt
             # G_B should be identity if real_A is fed.
-            self.idt_B = self.netG_B(self.real_A, self.condition, True)
+            self.idt_B = self.netG_B(self.real_A)
             self.loss_idt_B = self.criterionIdt(self.idt_B, self.real_A) * lambda_A * lambda_idt
         else:
             self.loss_idt_A = 0

@@ -98,8 +98,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = Dynet()
     elif netG == 'condition':
         net = ConditionGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
-    elif netG == 'ot':
-        net = OtGenerator(input_nc, output_nc, ngf)
+    elif netG == 'vit':
+        net = ViTGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -296,9 +296,9 @@ class UnetSkipConnectionBlock(nn.Module):
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
         if type(norm_layer) == functools.partial:
-            use_bias = norm_layer.func == nn.InstanceNorm2d
+            use_bias = norm_layer.func == nn.InstanceNorm3d
         else:
-            use_bias = norm_layer == nn.InstanceNorm2d
+            use_bias = norm_layer == nn.InstanceNorm3d
         if input_nc is None:
             input_nc = outer_nc
         downconv = nn.Conv3d(input_nc, inner_nc, kernel_size=4,
@@ -337,6 +337,10 @@ class UnetSkipConnectionBlock(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, x):
+        out = self.model(x)
+        print(out.shape)
+        print(x.shape)
+        exit()
         if self.outermost:
             return self.model(x)
         else:
@@ -586,31 +590,37 @@ class ConditionGenerator(nn.Module):
         x = self.decoder(x)
         return x
 
-class OtGenerator(nn.Module):
-    def __init__(self, input_nc=1, output_nc=1, n_feat=64, scale_unetfeats=32, kernel_size=3, reduction=[3,5,7], bias=False):
-        super(OtGenerator, self).__init__()
-        self.act = nn.PReLU()
+class ViTGenerator(nn.Module):
+    def __init__(self, input_nc, output_nc, img_size=(1, 64, 64, 64), norm_layer=nn.BatchNorm3d, use_dropout=False, n_blocks=9, padding_type='reflect'):
+        super().__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
+        self.ngf = ngf
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
-        self.shallow_feat1 = nn.Sequential(spectral_norm(conv(input_nc, n_feat, kernel_size, bias=bias)), ot_layers.CAB(n_feat, kernel_size, 3, bias=bias, act=self.act))
+        self.w1 = Parameter(torch.tensor([1.0]))
+        self.w2 = Parameter(torch.zeros(img_size))
 
-        self.encoder = ot_layers.Encoder(n_feat, kernel_size, reduction, self.act, bias, scale_unetfeats, csff=False)
-        self.decoder = ot_layers.Decoder(n_feat, kernel_size, reduction, self.act, bias, scale_unetfeats)
+        self.encoder = ConditionEncoder(input_nc, output_nc, ngf=ngf, norm_layer=nn.InstanceNorm3d, use_dropout=False, n_blocks=n_blocks, padding_type='reflect')
+        self.res = ConditionRes(input_nc, output_nc, ngf=ngf, norm_layer=nn.InstanceNorm3d, use_dropout=False, n_blocks=n_blocks, padding_type='reflect')
+        self.decoder = ConditionDecoder(input_nc, output_nc, ngf=ngf, norm_layer=nn.InstanceNorm3d, use_dropout=False, n_blocks=n_blocks, padding_type='reflect', n_condition=0)
 
-        self.sam12 = ot_layers.SAM(n_feat, kernel_size=1, bias=bias)
-
-    def forward(self, x3_img):
-        D = x3_img.size(1)
-        H = x3_img.size(2)
-        W = x3_img.size(3)
-
-        # Multi-Patch Hierarchy: Split Image into four non-overlapping patches
-
-        fea = self.shallow_feat1(x3_img)
-        fea2 = self.encoder(fea)
-        fea3 = self.decoder(fea2)
-        _, stage1_img = self.sam12(fea3[0], x3_img)
-
-        return stage1_img
+    def forward(self, input, condition, fwd=True, mask=None):
+        if fwd:
+            w2_mtx = self.w2.repeat(input.shape[0], 1, 1, 1, 1)
+            condition_mtx = torch.zeros(input.shape)
+            for i in range(condition_mtx.shape[0]):
+                if type(condition) is float:
+                    condition_mtx[i] = condition
+                else:
+                    condition_mtx[i] = condition[i]
+            if mask is not None:
+                x = self.w1 * input + w2_mtx * mask * condition_mtx.to(self.device)
+            else:
+                x = self.w1 * input + w2_mtx * condition_mtx.to(self.device)
+        else:
+            x = input
+        x = self.encoder(x)
+        x = self.res(x)
+        x = self.decoder(x)
+        return x

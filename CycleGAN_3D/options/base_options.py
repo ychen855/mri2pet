@@ -45,6 +45,11 @@ class BaseOptions():
         parser.add_argument('--data_split', type=str, default='data_split.csv', help='CSV file showing data groups. Used for cross-validation')
         parser.add_argument('--fold', type=int, default=0, help='nth fold of cross-validation.')
         parser.add_argument('--feature', type=str, help='Clinical feature to add')
+
+        # parser.add_argument('--lambda_A', type=float, default=10.0)
+        # parser.add_argument('--lambda_B', type=float, default=10.0)
+        # parser.add_argument('--lambda_identity', type=float, default=0.5)
+
         self.initialized = True
 
         return parser

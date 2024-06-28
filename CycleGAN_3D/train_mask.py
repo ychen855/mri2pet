@@ -25,9 +25,9 @@ if __name__ == '__main__':
     
     col_map = {'age': 2, 'sex': 3, 'apoe': 4, 'abeta': 5}
     if opt.cross_validation:
-        train_set = MaskDataSet(opt.data_path, True, opt.data_split, opt.fold, col=col_map[opt.feature], which_direction='AtoB', transforms=trainTransforms, shuffle_labels=False, train=True)
+        train_set = MaskDataSet(opt.data_path, True, opt.data_split, opt.fold, col=col_map[opt.feature], which_direction='AtoB', transforms=trainTransforms, shuffle_labels=True, train=True)
     else:
-        train_set = MaskDataSet(opt.data_path, col=col_map[opt.feature], which_direction='AtoB', transforms=trainTransforms, shuffle_labels=False, train=True)
+        train_set = MaskDataSet(opt.data_path, col=col_map[opt.feature], which_direction='AtoB', transforms=trainTransforms, shuffle_labels=True, train=True)
     print('lenght train list:', len(train_set))
     train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True, num_workers=opt.workers, pin_memory=True)  # Here are then fed to the network with a defined batch size
 
